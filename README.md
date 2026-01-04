@@ -24,7 +24,7 @@ pip install ipykernel jupyterlab
 pip install ipykernel
 
 # 5. Register kernel for Jupyter
-python -m ipykernel install --user --name=venv --display-name "Python (MLP)"
+python -m ipykernel install --user --name=venv --display-name "Projekt 3 - Weather prediction"
 
 # 6. Start Jupyter Lab
 jupyter-lab
