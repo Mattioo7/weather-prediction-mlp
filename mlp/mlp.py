@@ -3,6 +3,9 @@ from collections.abc import Callable
 from typing import Literal
 
 import numpy as np
+from tqdm import trange
+from tqdm import tqdm
+import time
 
 from .activations import sigmoid, d_sigmoid, identity, softmax, gelu, gelu_derivative
 from .losses import LOSSES
@@ -243,10 +246,13 @@ class MLP:
             batch_size: int | Literal["auto"] | None = "auto",
             shuffle: bool = True,
             verbose: bool = False,
+            log_every: int | None = None,
+            use_tqdm: bool = True,
             one_hot_if_needed: bool = True,
     ) -> tuple[list[float], list[list[float]], list[float]]:
 
-        print(">>> Version 3 (mini-batch)...")
+        start_time = time.perf_counter()
+        print(">>> Version 5 (mini-batch)...")
 
         if self.task == "regression":
             if Y.ndim == 1:
@@ -271,8 +277,12 @@ class MLP:
         else:
             eff_batch_size = int(batch_size)
 
+        if log_every is None:
+            log_every = max(1, epochs // 20)
+
         # --- Training loop ---
-        for ep in range(epochs):
+        epoch_iter = trange(epochs, desc="Training") if use_tqdm else range(epochs)
+        for ep in epoch_iter:
 
             indices = np.arange(n_samples)
             if shuffle:
@@ -313,9 +323,31 @@ class MLP:
             current_weight_norms = [float(np.linalg.norm(Wl)) for Wl in self.W]
             weight_history.append(current_weight_norms)
 
-            if verbose and ep % max(1, epochs // 20) == 0:
-                cur_lr = float(learning_rate) if learning_rate is not None else self.learning_rate
-                print(f"epoch={ep:4d}  loss={loss:.8f}  acc={accuracy_history[-1]:.4f}  lr={cur_lr:.4f}")
+            cur_lr = float(learning_rate) if learning_rate is not None else self.learning_rate
+
+            if use_tqdm:
+                epoch_iter.set_postfix(
+                    loss=f"{loss:.4f}",
+                    acc=f"{accuracy_history[-1]:.4f}" if self.task != "regression" else "n/a",
+                    lr=f"{cur_lr:.6g}",
+                )
+
+            if verbose and ((ep + 1) % log_every == 0 or (ep + 1) == epochs):
+                if self.task != "regression":
+                    msg = (
+                        f"[epoch {ep + 1:5d}/{epochs}] "
+                        f"loss={loss:.6f} acc={accuracy_history[-1]:.4f} lr={cur_lr:.6g}"
+                    )
+                else:
+                    msg = (
+                        f"[epoch {ep + 1:5d}/{epochs}] "
+                        f"loss={loss:.6f} lr={cur_lr:.6g}"
+                    )
+
+                if use_tqdm:
+                    tqdm.write(msg)
+                else:
+                    print(msg)
 
             if self.adaptive_lr:
                 self.learning_rate *= self.lr_decay
@@ -323,6 +355,9 @@ class MLP:
         self.loss_history = history
         self.weight_history = weight_history
         self.accuracy_history = accuracy_history
+
+        elapsed = time.perf_counter() - start_time
+        print(f"Training finished in {elapsed:.2f} seconds")
 
         return history, weight_history, accuracy_history
 
@@ -333,19 +368,19 @@ if __name__ == "__main__":
 
     rng = np.random.default_rng(1)
 
-    # === Regression ===
-    net_r = MLP(layer_sizes=[2, 16, 1], task="regression", activation="sigmoid", learning_rate=0.01, seed=0)
-    Xr = rng.normal(size=(512, 2))
-    Yr = (2 * Xr[:, :1] - 3 * Xr[:, 1:2]) + 0.05 * rng.normal(size=(512, 1))
-    print("=== Regression test ===")
-    print("Reg loss start:", net_r.compute_loss(Xr, Yr))
-    hist_r, weight_hist_r, _ = net_r.fit(Xr, Yr, epochs=2000, verbose=True)
-    print("Reg loss end:  ", hist_r[-1])
-    plot_loss(hist_r, title="Regression Training Loss")
-    Xr_preds = net_r.predict(Xr)
-    # plot_predictions(Yr, Xr_preds, title="Regression Predictions vs True")
-    # plot_weight_evolution(weight_hist_r, title="Regression Weight Evolution")
-    print("\n")
+    # # === Regression ===
+    # net_r = MLP(layer_sizes=[2, 16, 1], task="regression", activation="sigmoid", learning_rate=0.01, seed=0)
+    # Xr = rng.normal(size=(512, 2))
+    # Yr = (2 * Xr[:, :1] - 3 * Xr[:, 1:2]) + 0.05 * rng.normal(size=(512, 1))
+    # print("=== Regression test ===")
+    # print("Reg loss start:", net_r.compute_loss(Xr, Yr))
+    # hist_r, weight_hist_r, _ = net_r.fit(Xr, Yr, epochs=2000, verbose=True)
+    # print("Reg loss end:  ", hist_r[-1])
+    # plot_loss(hist_r, title="Regression Training Loss")
+    # Xr_preds = net_r.predict(Xr)
+    # # plot_predictions(Yr, Xr_preds, title="Regression Predictions vs True")
+    # # plot_weight_evolution(weight_hist_r, title="Regression Weight Evolution")
+    # print("\n")
 
     # === Binary classification ===
     net_b = MLP(layer_sizes=[2, 8, 1], task="binary", activation="sigmoid", learning_rate=0.05, seed=0)
