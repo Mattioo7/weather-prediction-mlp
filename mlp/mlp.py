@@ -249,11 +249,16 @@ class MLP:
             log_every: int | None = None,
             use_tqdm: bool = True,
             one_hot_if_needed: bool = True,
+            early_stopping: bool = False,
+            val_split: float = 0.1,
+            patience: int = 20,
+            min_delta: float = 0.0,
     ) -> tuple[list[float], list[list[float]], list[float]]:
 
         start_time = time.perf_counter()
-        print(">>> Version 5 (mini-batch)...")
+        print(">>> Version 9 (mini-batch + early stopping)...")
 
+        # ------------------- Y SHAPING -------------------
         if self.task == "regression":
             if Y.ndim == 1:
                 Y = Y.reshape(-1, 1)
@@ -263,13 +268,20 @@ class MLP:
             if one_hot_if_needed and (Y.ndim == 1 or (Y.ndim == 2 and Y.shape[1] == 1)):
                 Y = self._to_one_hot_encoding(Y, self.layer_sizes[-1])
 
-        history: list[float] = []
-        accuracy_history: list[float] = []
-        weight_history: list[list[float]] = []
+        # ------------------- TRAIN / VAL SPLIT -------------------
+        if early_stopping:
+            assert 0.0 < val_split < 0.5, "val_split must be in (0, 0.5)"
+            n = X.shape[0]
+            split = int((1.0 - val_split) * n)
 
-        # --- Resolve effective batch size ---
-        n_samples = X.shape[0]
+            X_train, X_val = X[:split], X[split:]
+            Y_train, Y_val = Y[:split], Y[split:]
+        else:
+            X_train, Y_train = X, Y
 
+        n_samples = X_train.shape[0]
+
+        # ------------------- BATCH SIZE -------------------
         if batch_size == "auto":
             eff_batch_size = min(200, n_samples)
         elif batch_size is None:
@@ -280,8 +292,20 @@ class MLP:
         if log_every is None:
             log_every = max(1, epochs // 20)
 
-        # --- Training loop ---
+        # ------------------- HISTORY -------------------
+        history: list[float] = []
+        accuracy_history: list[float] = []
+        weight_history: list[list[float]] = []
+
+        # ------------------- EARLY STOPPING STATE -------------------
+        best_val_loss = np.inf
+        best_W = None
+        best_b = None
+        epochs_no_improve = 0
+
+        # ------------------- TRAINING LOOP -------------------
         epoch_iter = trange(epochs, desc="Training") if use_tqdm else range(epochs)
+
         for ep in epoch_iter:
 
             indices = np.arange(n_samples)
@@ -294,8 +318,8 @@ class MLP:
                 end = start + eff_batch_size
                 batch_idx = indices[start:end]
 
-                X_batch = X[batch_idx]
-                Y_batch = Y[batch_idx]
+                X_batch = X_train[batch_idx]
+                Y_batch = Y_train[batch_idx]
 
                 Y_pred_batch = self.forward(X_batch)
                 grads = self.backward(Y_batch)
@@ -306,25 +330,27 @@ class MLP:
             loss = epoch_loss / n_samples
             history.append(float(loss))
 
-            # --- Accuracy (tylko dla klasyfikacji) ---
+            # ------------------- ACCURACY (tylko dla klasyfikacji) -------------------
             if self.task in ["binary", "multiclass"]:
-                Y_pred = self.forward(X)
+                Y_pred = self.forward(X_train)
                 if self.task == "multiclass":
-                    y_true = np.argmax(Y, axis=1)
+                    y_true = np.argmax(Y_train, axis=1)
                     y_pred = np.argmax(Y_pred, axis=1)
                 else:  # binary
-                    y_true = Y.ravel().astype(int) 
+                    y_true = Y_train.ravel().astype(int)
                     y_pred = (Y_pred >= 0.5).astype(int).ravel()
                 acc = np.mean(y_true == y_pred)
                 accuracy_history.append(acc)
             else:
                 accuracy_history.append(np.nan)
 
+            # ------------------- WEIGHT NORMS -------------------
             current_weight_norms = [float(np.linalg.norm(Wl)) for Wl in self.W]
             weight_history.append(current_weight_norms)
 
             cur_lr = float(learning_rate) if learning_rate is not None else self.learning_rate
 
+            # ------------------- LOGGING -------------------
             if use_tqdm:
                 epoch_iter.set_postfix(
                     loss=f"{loss:.4f}",
@@ -351,6 +377,55 @@ class MLP:
 
             if self.adaptive_lr:
                 self.learning_rate *= self.lr_decay
+
+            # ------------------- VALIDATION & EARLY STOPPING -------------------
+            if early_stopping:
+                Y_val_pred = self.forward(X_val)
+                val_loss = float(self.loss_fn(Y_val, Y_val_pred))
+
+                if val_loss < best_val_loss - min_delta:
+                    best_val_loss = val_loss
+                    epochs_no_improve = 0
+                    best_W = [W.copy() for W in self.W]
+                    best_b = [b.copy() for b in self.b]
+                else:
+                    epochs_no_improve += 1
+
+                if epochs_no_improve >= patience:
+                    if self.task in ["binary", "multiclass"]:
+                        train_acc = accuracy_history[-1]
+
+                        # policz tylko walidacyjną
+                        if self.task == "multiclass":
+                            y_val_true = np.argmax(Y_val, axis=1)
+                            y_val_pred = np.argmax(Y_val_pred, axis=1)
+                        else:
+                            y_val_true = Y_val.ravel().astype(int)
+                            y_val_pred = (Y_val_pred >= 0.5).astype(int).ravel()
+
+                        val_acc = np.mean(y_val_true == y_val_pred)
+
+                        acc_msg = f", train_acc={train_acc:.4f}, val_acc={val_acc:.4f}"
+                    else:
+                        acc_msg = ""
+
+                    msg = (
+                        f"Early stopping at epoch {ep + 1}, "
+                        f"best val_loss={best_val_loss:.6f}"
+                        f"{acc_msg} "
+                        f"after {epochs_no_improve} epochs without improvement."
+                    )
+
+                    if use_tqdm:
+                        tqdm.write(msg)
+                    else:
+                        print(msg)
+                    break
+
+        # ------------------- RESTORE BEST MODEL -------------------
+        if early_stopping and best_W is not None:
+            self.W = best_W
+            self.b = best_b
 
         self.loss_history = history
         self.weight_history = weight_history
