@@ -48,14 +48,16 @@ class MLP:
             layer_sizes: list[int],
             task: TaskType,
             activation: str,
-            learning_rate: float = 1e-2,
+            learning_rate: float | None = None,
             seed: int | None = None,
             use_bias: bool = True,
             loss: str | None = None,
-            momentum: bool = False,
+            optimizer: Literal["sgd", "momentum", "adam"] = "sgd",
             beta: float = 0.9,
+            beta2: float = 0.999,
+            eps: float = 1e-8,
             adaptive_lr: bool = False,
-            lr_decay: float = 0.99
+            lr_decay: float = 0.99,
     ):
         assert len(layer_sizes) >= 2, "Provide at least [n_in, n_out]"
         assert task in ("regression", "binary", "multiclass"), \
@@ -63,10 +65,26 @@ class MLP:
         assert activation in ("sigmoid", "gelu", "identity"), \
             f"Invalid activation function: {activation}. Allowed: 'sigmoid', 'gelu', 'identity'"
 
+        print(">>> Initializing MLP...")
+        print(f"Layer sizes: {layer_sizes}, Task: {task}, Activation: {activation}, Optimizer: {optimizer}")
+
         self.layer_sizes = layer_sizes
         self.n_layers = len(layer_sizes) - 1
         self.learning_rate = float(learning_rate)
         self.task = task
+
+        self.optimizer = optimizer
+
+        # --- Default learning rate zależny od optymalizatora ---
+        if learning_rate is None:
+            if optimizer == "sgd":
+                self.learning_rate = 1e-2
+            elif optimizer == "momentum":
+                self.learning_rate = 5e-3
+            elif optimizer == "adam":
+                self.learning_rate = 1e-3
+        else:
+            self.learning_rate = float(learning_rate)
 
         self.loss_history = []
         self.weight_history = []
@@ -136,14 +154,23 @@ class MLP:
             self.W.append(W_l)
             self.b.append(b_l)
 
-        self.momentum = momentum
+        # self.momentum = momentum
         self.beta = beta
         self.adaptive_lr = adaptive_lr
         self.lr_decay = lr_decay
 
-        # Initialize velocity buffers for momentum
+        # --- Parametry momentów ---
+        self.beta = beta
+        self.beta2 = beta2
+        self.eps = eps
+        self.t = 0  # licznik kroków (Adam)
+
+        # --- Bufory ---
         self.vW = [np.zeros_like(W) for W in self.W]
         self.vb = [np.zeros_like(b) for b in self.b]
+
+        self.mW = [np.zeros_like(W) for W in self.W]
+        self.mb = [np.zeros_like(b) for b in self.b]
 
     def forward(self, X: np.ndarray) -> np.ndarray:
         assert X.ndim == 2 and X.shape[1] == self.layer_sizes[0], (
@@ -198,19 +225,53 @@ class MLP:
 
         return dW, db
 
-    def step(self, learning_rate: float | None, grads: tuple[list[np.ndarray], list[np.ndarray]]) -> None:
-        eta = float(learning_rate) if learning_rate is not None else self.learning_rate
+    def step(
+            self,
+            learning_rate: float | None,
+            grads: tuple[list[np.ndarray], list[np.ndarray]]
+    ) -> None:
+        eta = learning_rate if learning_rate is not None else self.learning_rate
         dW, db = grads
 
-        for l in range(self.n_layers):
-            if self.momentum:
-                self.vW[l] = self.beta * self.vW[l] + (1 - self.beta) * dW[l]
-                self.vb[l] = self.beta * self.vb[l] + (1 - self.beta) * db[l]
-                self.W[l] -= eta * self.vW[l]
-                self.b[l] -= eta * self.vb[l]
-            else:
+        # ================== SGD ==================
+        if self.optimizer == "sgd":
+            for l in range(self.n_layers):
                 self.W[l] -= eta * dW[l]
                 self.b[l] -= eta * db[l]
+
+        # ================== SGD + MOMENTUM ==================
+        elif self.optimizer == "momentum":
+            for l in range(self.n_layers):
+                self.vW[l] = self.beta * self.vW[l] + (1 - self.beta) * dW[l]
+                self.vb[l] = self.beta * self.vb[l] + (1 - self.beta) * db[l]
+
+                self.W[l] -= eta * self.vW[l]
+                self.b[l] -= eta * self.vb[l]
+
+        # ================== ADAM ==================
+        elif self.optimizer == "adam":
+            self.t += 1
+            for l in range(self.n_layers):
+                # 1st moment
+                self.mW[l] = self.beta * self.mW[l] + (1 - self.beta) * dW[l]
+                self.mb[l] = self.beta * self.mb[l] + (1 - self.beta) * db[l]
+
+                # 2nd moment
+                self.vW[l] = self.beta2 * self.vW[l] + (1 - self.beta2) * (dW[l] ** 2)
+                self.vb[l] = self.beta2 * self.vb[l] + (1 - self.beta2) * (db[l] ** 2)
+
+                # bias correction
+                mW_hat = self.mW[l] / (1 - self.beta ** self.t)
+                vW_hat = self.vW[l] / (1 - self.beta2 ** self.t)
+
+                mb_hat = self.mb[l] / (1 - self.beta ** self.t)
+                vb_hat = self.vb[l] / (1 - self.beta2 ** self.t)
+
+                self.W[l] -= eta * mW_hat / (np.sqrt(vW_hat) + self.eps)
+                self.b[l] -= eta * mb_hat / (np.sqrt(vb_hat) + self.eps)
+
+        else:
+            raise ValueError(f"Unknown optimizer: {self.optimizer}")
 
     def compute_loss(self, X: np.ndarray, Y: np.ndarray) -> float:
         Y_pred = self.forward(X)
@@ -252,11 +313,11 @@ class MLP:
             early_stopping: bool = False,
             val_split: float = 0.1,
             patience: int = 20,
-            min_delta: float = 0.0,
+            min_delta: float = 0.001,
     ) -> tuple[list[float], list[list[float]], list[float]]:
 
         start_time = time.perf_counter()
-        print(">>> Version 13 (mini-batch + early stopping)...")
+        print(">>> Version 16 (mini-batch + early stopping)...")
 
         # ------------------- Y SHAPING -------------------
         if self.task == "regression":
@@ -283,11 +344,22 @@ class MLP:
 
         # ------------------- BATCH SIZE -------------------
         if batch_size == "auto":
-            eff_batch_size = min(200, n_samples)
+            if self.optimizer == "adam":
+                eff_batch_size = min(100, n_samples)
+            elif self.optimizer == "momentum":
+                eff_batch_size = min(100, n_samples)
+            else:
+                eff_batch_size = min(100, n_samples)
         elif batch_size is None:
-            eff_batch_size = n_samples  # full batch (if 1 then SGD)
+            eff_batch_size = n_samples  # full batch
         else:
-            eff_batch_size = int(batch_size)
+            eff_batch_size = int(batch_size) # if 1 then SGD
+
+        if early_stopping:
+            if self.optimizer == "adam":
+                patience = min(patience, 10)
+            elif self.optimizer == "momentum":
+                patience = min(patience, 20)
 
         if log_every is None:
             log_every = max(1, epochs // 20)
