@@ -256,7 +256,7 @@ class MLP:
     ) -> tuple[list[float], list[list[float]], list[float]]:
 
         start_time = time.perf_counter()
-        print(">>> Version 9 (mini-batch + early stopping)...")
+        print(">>> Version 13 (mini-batch + early stopping)...")
 
         # ------------------- Y SHAPING -------------------
         if self.task == "regression":
@@ -370,9 +370,7 @@ class MLP:
                         f"loss={loss:.6f} lr={cur_lr:.6g}"
                     )
 
-                if use_tqdm:
-                    tqdm.write(msg)
-                else:
+                if not use_tqdm:
                     print(msg)
 
             if self.adaptive_lr:
