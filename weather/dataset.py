@@ -4,12 +4,14 @@ from pathlib import Path
 from .io import load_variable_csv
 from .preprocessing import daily_aggregate
 from .encoding import encode_wind_direction_deg
+from tqdm import tqdm
 
 
 def build_dataset(cfg, verbose: bool | str = False):
     data_dir = Path(cfg.data_dir)
 
     debug = verbose == "debug"
+    use_tqdm = verbose is True and not debug
 
     def log(msg):
         if verbose:
@@ -56,7 +58,15 @@ def build_dataset(cfg, verbose: bool | str = False):
 
         debug_log(f"Total days available: {len(dates)}")
 
-        for i in range(cfg.window_size, len(dates) - 1):
+        day_iter = range(cfg.window_size, len(dates) - 1)
+
+        if use_tqdm:
+            day_iter = tqdm(
+                day_iter,
+                desc=f"{city} | windows"
+            )
+
+        for i in day_iter:
             total_windows += 1
 
             day_I = dates[i - cfg.window_size : i]
