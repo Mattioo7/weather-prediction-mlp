@@ -4,13 +4,16 @@ from typing import Literal, Sequence
 Aggregation = Literal["mean", "min", "max"]
 Normalization = Literal["global", "per_city", "none"]
 WindowAggregation = Literal["flatten", "aggregate"]
+Split = Literal["train", "test"]
+Target = Literal["temperature", "wind_speed"]
 
 @dataclass
 class WeatherConfig:
     data_dir: str
+    split: Split
 
     # --- zadanie ---
-    target: Literal["temperature", "wind_speed"]
+    target: Target
 
     # --- okno czasowe ---
     window_size: int = 3          # liczba dni I

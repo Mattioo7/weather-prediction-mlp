@@ -34,7 +34,7 @@ def build_dataset(cfg, verbose: bool | str = False):
     # -------------------- LOAD DATA --------------------
     data = {}
     for var in cfg.input_variables:
-        path = data_dir / "train" / f"{var}_train.csv"
+        path = data_dir / cfg.split / f"{var}_{cfg.split}.csv"
         log(f"Loading {path.name}")
         data[var] = load_variable_csv(path)
         debug_log(f"{var}: shape={data[var].shape}")
