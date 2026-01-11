@@ -165,20 +165,35 @@ def build_dataset(cfg, verbose: bool | str = False):
                 day_O : day_O + pd.Timedelta("1D")
             ]
 
-            target_day = target_series.mean()
+            target_day_max = target_series.max()
+            target_day_mean = target_series.mean()
 
-            if np.isnan(target_day):
+            if np.isnan(target_day_max):
                 rejected_targets += 1
                 rejected_windows += 1
                 debug_log(f"  REJECT target {day_O.date()} | NaN")
                 continue
 
+            # ----------- TASK SELECTION -----------
+            if cfg.target_mode == "regression":
+                target_value = target_day_mean
+
+            elif cfg.target_mode == "binary":
+                target_value = int(target_day_max >= cfg.target_threshold)
+
+            else:
+                raise ValueError(f"Unknown target_mode: {cfg.target_mode}")
+
             X_rows.append(features)
-            Y_rows.append(target_day)
+            Y_rows.append(target_value)
 
     # -------------------- FINAL ARRAYS --------------------
     X = np.asarray(X_rows, dtype=float)
-    Y = np.asarray(Y_rows, dtype=float).reshape(-1, 1)
+
+    if cfg.target_mode == "binary":
+        Y = np.asarray(Y_rows, dtype=int).reshape(-1, 1)
+    else:
+        Y = np.asarray(Y_rows, dtype=float).reshape(-1, 1)
 
     # -------------------- SUMMARY --------------------
     log("\n=== BUILD DATASET SUMMARY ===")

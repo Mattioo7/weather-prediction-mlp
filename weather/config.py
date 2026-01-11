@@ -6,6 +6,7 @@ Normalization = Literal["global", "per_city", "none"]
 WindowAggregation = Literal["flatten", "aggregate"]
 Split = Literal["train", "test"]
 Target = Literal["temperature", "wind_speed"]
+TargetMode = Literal["regression", "binary"]
 
 @dataclass
 class WeatherConfig:
@@ -14,6 +15,8 @@ class WeatherConfig:
 
     # --- zadanie ---
     target: Target
+    target_mode: TargetMode = "regression"
+    target_threshold: float | None = None
 
     # --- okno czasowe ---
     window_size: int = 3          # liczba dni I
