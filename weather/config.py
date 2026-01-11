@@ -1,0 +1,39 @@
+from dataclasses import dataclass
+from typing import Literal, Sequence
+
+Aggregation = Literal["mean", "min", "max"]
+Normalization = Literal["global", "per_city", "none"]
+
+@dataclass
+class WeatherConfig:
+    data_dir: str
+
+    # --- zadanie ---
+    target: Literal["temperature", "wind_speed"]
+
+    # --- okno czasowe ---
+    window_size: int = 3          # liczba dni I
+    skip_day: bool = True         # pomijanie X
+
+    # --- dane ---
+    cities: Sequence[str] | None = None
+    input_variables: Sequence[str] = (
+        "temperature",
+        "humidity",
+        "pressure",
+        "wind_speed",
+        "wind_direction",
+    )
+
+    # --- agregacja ---
+    aggregations: dict[str, Sequence[Aggregation]] = None
+
+    # --- kodowanie ---
+    encode_wind_direction: bool = True
+    include_city_coords: bool = False
+
+    # --- normalizacja ---
+    normalization: Normalization = "global"
+
+    # --- braki danych ---
+    max_missing_ratio_per_day: float = 0.3
