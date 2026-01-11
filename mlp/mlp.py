@@ -233,6 +233,12 @@ class MLP:
         eta = learning_rate if learning_rate is not None else self.learning_rate
         dW, db = grads
 
+        max_norm = 5.0
+        for l in range(self.n_layers):
+            norm = np.linalg.norm(dW[l])
+            if norm > max_norm:
+                dW[l] *= max_norm / (norm + 1e-8)
+
         # ================== SGD ==================
         if self.optimizer == "sgd":
             for l in range(self.n_layers):
@@ -355,11 +361,11 @@ class MLP:
         else:
             eff_batch_size = int(batch_size) # if 1 then SGD
 
-        if early_stopping:
-            if self.optimizer == "adam":
-                patience = min(patience, 10)
-            elif self.optimizer == "momentum":
-                patience = min(patience, 20)
+        # if early_stopping:
+        #     if self.optimizer == "adam":
+        #         patience = min(patience, 10)
+        #     elif self.optimizer == "momentum":
+        #         patience = min(patience, 20)
 
         if log_every is None:
             log_every = max(1, epochs // 20)

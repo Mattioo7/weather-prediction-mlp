@@ -24,9 +24,12 @@ def softmax(x: np.ndarray, axis: int = 1) -> np.ndarray:
 
 
 def gelu(x: ArrayLike) -> np.ndarray:
+    x = np.clip(x, -10.0, 10.0)
     return 0.5 * x * (1 + np.tanh(np.sqrt(2 / np.pi) * (x + 0.044715 * np.power(x, 3))))
 
 def gelu_derivative(x: ArrayLike) -> np.ndarray:
+    x = np.clip(x, -10.0, 10.0)
+
     sqrt_2_pi = np.sqrt(2 / np.pi)
     x_cubed_term = 0.044715 * np.power(x, 3)
     tanh_arg = sqrt_2_pi * (x + x_cubed_term)

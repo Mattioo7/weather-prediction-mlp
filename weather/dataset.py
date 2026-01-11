@@ -13,7 +13,7 @@ def build_dataset(cfg, verbose: bool | str = False):
     data_dir = Path(cfg.data_dir)
 
     debug = verbose == "debug"
-    use_tqdm = verbose is True and not debug
+    use_tqdm = debug is not True
 
     def log(msg):
         if verbose:
