@@ -1,10 +1,12 @@
 import numpy as np
 import pandas as pd
 from pathlib import Path
+from tqdm import tqdm
+import pdb
+
 from .io import load_variable_csv
 from .preprocessing import daily_aggregate
 from .encoding import encode_wind_direction_deg
-from tqdm import tqdm
 
 
 def build_dataset(cfg, verbose: bool | str = False):
@@ -24,6 +26,7 @@ def build_dataset(cfg, verbose: bool | str = False):
     log("=== BUILD DATASET START ===")
     log(f"Data directory: {data_dir.resolve()}")
     log(f"Target variable: {cfg.target}")
+    log(f"Aggregation mode: {cfg.window_aggregation}")
     log(f"Window size (I): {cfg.window_size}, Skip day X: {cfg.skip_day}")
     log(f"Max missing ratio per day: {cfg.max_missing_ratio_per_day}")
     log(f"Input variables: {cfg.input_variables}")
@@ -75,31 +78,62 @@ def build_dataset(cfg, verbose: bool | str = False):
             features = []
             valid = True
 
+            # ----------- INPUT DAYS (I I I) -----------
             for d in day_I:
                 debug_log(f"  Processing day I: {d.date()}")
 
-                for var, aggs in cfg.aggregations.items():
-                    day_data = city_series[var][d : d + pd.Timedelta("1D")]
+                # ----------- FLATTEN -----------
+                if cfg.window_aggregation == "flatten":
+                    for var, aggs in cfg.aggregations.items():
+                        day_data = city_series[var][d : d + pd.Timedelta("1D")] # TODO: check slicing
 
-                    agg = daily_aggregate(
-                        day_data,
-                        aggs,
-                        cfg.max_missing_ratio_per_day,
-                    )
-
-                    if agg is None:
-                        rejected_days += 1
-                        valid = False
-                        debug_log(
-                            f"    REJECT day {d.date()} | var={var} | missing ratio too high or NaN"
+                        agg = daily_aggregate(
+                            day_data,
+                            aggs,
+                            cfg.max_missing_ratio_per_day,
                         )
-                        break
 
-                    if var == "wind_direction" and cfg.encode_wind_direction:
-                        sin, cos = encode_wind_direction_deg(agg["mean"])
-                        features.extend([sin, cos])
-                    else:
-                        features.extend(agg.values())
+                        if agg is None:
+                            rejected_days += 1
+                            valid = False
+                            debug_log(
+                                f"    REJECT day {d.date()} | var={var} | missing ratio too high or NaN"
+                            )
+                            break
+
+                        if var == "wind_direction" and cfg.encode_wind_direction:
+                            sin, cos = encode_wind_direction_deg(agg["mean"])
+                            features.extend([sin, cos])
+                        else:
+                            features.extend(agg.values())
+
+                # ========== AGGREGATE ==========
+                elif cfg.window_aggregation == "aggregate":
+                    for var, aggs in cfg.aggregations.items():
+                        day_data = city_series[var][d: d + pd.Timedelta("1D")]  # TODO: check slicing
+
+                        agg = daily_aggregate(
+                            day_data,
+                            aggs,
+                            cfg.max_missing_ratio_per_day,
+                        )
+
+                        if agg is None:
+                            rejected_days += 1
+                            valid = False
+                            debug_log(
+                                f"    REJECT day {d.date()} | var={var} | missing ratio too high or NaN"
+                            )
+                            break
+
+                        if var == "wind_direction" and cfg.encode_wind_direction:
+                            sin, cos = encode_wind_direction_deg(agg["mean"])
+                            features.extend([sin, cos])
+                        else:
+                            features.extend(agg.values())
+
+                else:
+                    raise ValueError(f"Unknown window_aggregation: {cfg.window_aggregation}")
 
                 if not valid:
                     break
@@ -108,7 +142,7 @@ def build_dataset(cfg, verbose: bool | str = False):
                 rejected_windows += 1
                 continue
 
-            # -------------------- TARGET --------------------
+            # ----------- TARGET (O) -----------
             target_series = city_series[cfg.target][
                 day_O : day_O + pd.Timedelta("1D")
             ]
@@ -118,9 +152,7 @@ def build_dataset(cfg, verbose: bool | str = False):
             if np.isnan(target_day):
                 rejected_targets += 1
                 rejected_windows += 1
-                debug_log(
-                    f"  REJECT target day {day_O.date()} | NaN target"
-                )
+                debug_log(f"  REJECT target {day_O.date()} | NaN")
                 continue
 
             X_rows.append(features)
@@ -132,13 +164,14 @@ def build_dataset(cfg, verbose: bool | str = False):
 
     # -------------------- SUMMARY --------------------
     log("\n=== BUILD DATASET SUMMARY ===")
-    log(f"Total candidate windows: {total_windows}")
+    log(f"Aggregation mode: {cfg.window_aggregation}")
+    log(f"Total windows: {total_windows}")
     log(f"Accepted samples: {len(X_rows)}")
     log(f"Rejected windows: {rejected_windows}")
-    log(f"  - rejected due to day aggregation: {rejected_days}")
-    log(f"  - rejected due to NaN target: {rejected_targets}")
-    log(f"Final X shape: {X.shape}")
-    log(f"Final Y shape: {Y.shape}")
+    log(f"Rejected days: {rejected_days}")
+    log(f"Rejected targets: {rejected_targets}")
+    log(f"X shape: {X.shape}")
+    log(f"Y shape: {Y.shape}")
     log("=== BUILD DATASET END ===")
 
     return X, Y

@@ -3,6 +3,7 @@ from typing import Literal, Sequence
 
 Aggregation = Literal["mean", "min", "max"]
 Normalization = Literal["global", "per_city", "none"]
+WindowAggregation = Literal["flatten", "aggregate"]
 
 @dataclass
 class WeatherConfig:
@@ -14,6 +15,9 @@ class WeatherConfig:
     # --- okno czasowe ---
     window_size: int = 3          # liczba dni I
     skip_day: bool = True         # pomijanie X
+
+    window_aggregation: WindowAggregation = "flatten"
+    hours_per_day: int = 24
 
     # --- dane ---
     cities: Sequence[str] | None = None
