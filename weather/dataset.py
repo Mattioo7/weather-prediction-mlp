@@ -26,7 +26,7 @@ def build_dataset(cfg, verbose: bool | str = False):
     log("=== BUILD DATASET START ===")
     log(f"Data directory: {data_dir.resolve()}")
     log(f"Target variable: {cfg.target}")
-    log(f"Aggregation mode: {cfg.window_aggregation}")
+    log(f"Window aggregation mode: {cfg.window_aggregation}")
     log(f"Window size (I): {cfg.window_size}, Skip day X: {cfg.skip_day}")
     log(f"Max missing ratio per day: {cfg.max_missing_ratio_per_day}")
     log(f"Input variables: {cfg.input_variables}")
@@ -64,10 +64,7 @@ def build_dataset(cfg, verbose: bool | str = False):
         day_iter = range(cfg.window_size, len(dates) - 1)
 
         if use_tqdm:
-            day_iter = tqdm(
-                day_iter,
-                desc=f"{city} | windows"
-            )
+            day_iter = tqdm(day_iter, desc=f"{city} | windows")
 
         for i in day_iter:
             total_windows += 1
@@ -75,15 +72,18 @@ def build_dataset(cfg, verbose: bool | str = False):
             day_I = dates[i - cfg.window_size : i]
             day_O = dates[i + 1] if cfg.skip_day else dates[i]
 
+            debug_log(f"Processing window | days I: {[d.date() for d in day_I]} -> day O: {day_O.date()}")
+
             features = []
             valid = True
 
-            # ----------- INPUT DAYS (I I I) -----------
-            for d in day_I:
-                debug_log(f"  Processing day I: {d.date()}")
+            # ==========================================================
+            # FLATTEN WINDOW  (agregacja dnia + konkatenacja dni)
+            # ==========================================================
+            if cfg.window_aggregation == "flatten":
+                for d in day_I:
+                    debug_log(f"  Processing day I: {d.date()}")
 
-                # ----------- FLATTEN -----------
-                if cfg.window_aggregation == "flatten":
                     for var, aggs in cfg.aggregations.items():
                         day_data = city_series[var][d : d + pd.Timedelta("1D")] # TODO: check slicing
 
@@ -107,8 +107,19 @@ def build_dataset(cfg, verbose: bool | str = False):
                         else:
                             features.extend(agg.values())
 
-                # ========== AGGREGATE ==========
-                elif cfg.window_aggregation == "aggregate":
+                    if not valid:
+                        break
+
+            # ==========================================================
+            # AGGREGATE WINDOW  (agregacja dnia + agregacja po dniach)
+            # ==========================================================
+            elif cfg.window_aggregation == "aggregate":
+                day_feature_vectors = []
+
+                for d in day_I:
+                    debug_log(f"  Processing day I: {d.date()}")
+
+                    day_features = []
                     for var, aggs in cfg.aggregations.items():
                         day_data = city_series[var][d: d + pd.Timedelta("1D")]  # TODO: check slicing
 
@@ -128,15 +139,22 @@ def build_dataset(cfg, verbose: bool | str = False):
 
                         if var == "wind_direction" and cfg.encode_wind_direction:
                             sin, cos = encode_wind_direction_deg(agg["mean"])
-                            features.extend([sin, cos])
+                            day_features.extend([sin, cos])
                         else:
-                            features.extend(agg.values())
+                            day_features.extend(agg.values())
 
-                else:
-                    raise ValueError(f"Unknown window_aggregation: {cfg.window_aggregation}")
+                    if not valid:
+                        break
 
-                if not valid:
-                    break
+                    day_feature_vectors.append(day_features)
+
+                if valid:
+                    W = np.asarray(day_feature_vectors, dtype=float)
+                    # pdb.set_trace()
+                    features = W.mean(axis=0).tolist()
+
+            else:
+                raise ValueError(f"Unknown window_aggregation: {cfg.window_aggregation}")
 
             if not valid:
                 rejected_windows += 1
@@ -164,7 +182,7 @@ def build_dataset(cfg, verbose: bool | str = False):
 
     # -------------------- SUMMARY --------------------
     log("\n=== BUILD DATASET SUMMARY ===")
-    log(f"Aggregation mode: {cfg.window_aggregation}")
+    log(f"Window aggregation mode: {cfg.window_aggregation}")
     log(f"Total windows: {total_windows}")
     log(f"Accepted samples: {len(X_rows)}")
     log(f"Rejected windows: {rejected_windows}")
