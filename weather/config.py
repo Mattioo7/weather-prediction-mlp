@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Literal, Sequence
+from typing import Literal
 
 
 # =========================
@@ -42,12 +42,12 @@ Aggregation = Literal["mean", "min", "max"]
 
 @dataclass
 class WeatherGridParams:
-    window_aggregation: WindowAggregation = "flatten"
-    input_variables: tuple[str, ...] = ()
-    aggregations: dict[str, tuple[Aggregation, ...]] | None = None
-    cities: tuple[str, ...] | None = None
+    window_aggregation: WindowAggregation | list[WindowAggregation] = "flatten"
+    input_variables: tuple[str, ...] | list[tuple[str, ...]] = ()
+    aggregations: dict[str, tuple[Aggregation, ...]] | list[dict[str, tuple[Aggregation, ...]]] | None = None
+    cities: tuple[str, ...] | list[tuple[str, ...]] | None = None
 
-    window_size: int = 3
+    window_size: int | list[int] = 3
 
 
 # =========================
@@ -72,14 +72,14 @@ Losses = Literal["mse", "mae", "huber", "binary_cross_entropy", "categorical_cro
 
 @dataclass
 class MLPGridParams:
-    hidden_layers: Sequence[int]
-    loss: Losses
-    activation: Activations = "gelu"
+    hidden_layers: tuple[int, ...] | list[tuple[int, ...]]
+    loss: Losses | list[Losses]
+    activation: Activations | list[Activations] = "gelu"
 
-    learning_rate: float = 0.01
-    seed: int = 42
-    use_bias: bool = True
-    optimizer: Optimizer = "momentum"
+    learning_rate: float | list[float] = 0.01
+    seed: int | list[int] = 42
+    use_bias: bool | list[bool] = True
+    optimizer: Optimizer | list[Optimizer] = "momentum"
 
 # =========================
 # FIT
@@ -97,11 +97,11 @@ class FitFixedParams:
 
 @dataclass
 class FitGridParams:
-    epochs: int = 400
-    batch_size: int | Literal["auto"] | None = "auto"
+    epochs: int | list[int] = 400
+    batch_size: int | Literal["auto"] | None | list[int | Literal["auto"] | None] = "auto"
 
-    shuffle: bool = False
-    val_split: float = 0.1
+    shuffle: bool | list[bool] = False
+    val_split: float | list[float] = 0.1
 
 
 # =========================

@@ -1,4 +1,3 @@
-import pdb
 from dataclasses import replace
 from itertools import product
 from typing import Iterable
@@ -16,12 +15,18 @@ from weather.config import (
 
 def expand_grid(params):
     keys = params.__dataclass_fields__.keys()
-    values = [
-        v if isinstance(v, (list, tuple)) else [v]
-        for v in (getattr(params, k) for k in keys)
-    ]
+    axes = []
 
-    for combo in product(*values):
+    for key in keys:
+        value = getattr(params, key)
+
+        # ONLY list means grid dimension
+        if isinstance(value, list):
+            axes.append(value)
+        else:
+            axes.append([value])
+
+    for combo in product(*axes):
         yield replace(params, **dict(zip(keys, combo)))
 
 
@@ -46,7 +51,6 @@ class Search:
         wg = weather_grid
 
         cfg_train = self._to_weather_config(wf, wg, split="train")
-        pdb.set_trace()
         X_train, y_train = build_dataset(cfg_train)
         X_train, mu, sigma = normalize_global(X_train)
 
