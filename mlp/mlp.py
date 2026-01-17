@@ -296,6 +296,14 @@ class MLP:
             return Y_pred
         return np.argmax(Y_pred, axis=1).reshape(-1, 1)
 
+    def predict_proba(self, X: np.ndarray) -> np.ndarray:
+        Y_pred = self.forward(X)
+
+        if self.task in ["binary", "multiclass"]:
+            return Y_pred
+
+        raise ValueError("predict_proba is only valid for classification tasks")
+
     @staticmethod
     def _to_one_hot_encoding(y: np.ndarray, n_classes: int) -> np.ndarray:
         if y.ndim == 2 and y.shape[1] == 1:

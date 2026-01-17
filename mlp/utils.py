@@ -173,3 +173,143 @@ def load_mnist_labels(path: str) -> np.ndarray:
         magic, num = struct.unpack(">II", f.read(8))
         labels = np.frombuffer(f.read(), dtype=np.uint8).reshape(-1, 1)
     return labels
+
+def auc(y_true: np.ndarray, y_score: np.ndarray) -> float:
+    y_true = np.ravel(y_true).astype(int)
+    y_score = np.ravel(y_score)
+
+    pos = y_score[y_true == 1]
+    neg = y_score[y_true == 0]
+
+    if len(pos) == 0 or len(neg) == 0:
+        return np.nan
+
+    comparisons = pos[:, None] > neg[None, :]
+    ties = pos[:, None] == neg[None, :]
+
+    return (comparisons.sum() + 0.5 * ties.sum()) / (len(pos) * len(neg))
+
+def confusion_matrix_binary(y_true, y_pred):
+    y_true = np.ravel(y_true).astype(int)
+    y_pred = np.ravel(y_pred).astype(int)
+
+    tp = np.sum((y_pred == 1) & (y_true == 1))
+    tn = np.sum((y_pred == 0) & (y_true == 0))
+    fp = np.sum((y_pred == 1) & (y_true == 0))
+    fn = np.sum((y_pred == 0) & (y_true == 1))
+
+    return tp, fp, fn, tn
+
+def precision(y_true, y_pred, eps=1e-8):
+    tp, fp, _, _ = confusion_matrix_binary(y_true, y_pred)
+    return tp / (tp + fp + eps)
+
+def recall(y_true, y_pred, eps=1e-8):
+    tp, _, fn, _ = confusion_matrix_binary(y_true, y_pred)
+    return tp / (tp + fn + eps)
+
+def f1_score(y_true, y_pred, eps=1e-8):
+    p = precision(y_true, y_pred, eps)
+    r = recall(y_true, y_pred, eps)
+    return 2 * p * r / (p + r + eps)
+
+def mae(y_true, y_pred):
+    y_true = np.ravel(y_true)
+    y_pred = np.ravel(y_pred)
+    return float(np.mean(np.abs(y_true - y_pred)))
+
+def rmse(y_true, y_pred):
+    return float(np.sqrt(mse(y_true, y_pred)))
+
+def r2_score(y_true, y_pred):
+    y_true = np.ravel(y_true)
+    y_pred = np.ravel(y_pred)
+
+    ss_res = np.sum((y_true - y_pred) ** 2)
+    ss_tot = np.sum((y_true - np.mean(y_true)) ** 2)
+
+    return 1.0 - ss_res / (ss_tot + 1e-12)
+
+def accuracy_within_tolerance(y_true, y_pred, tol: float):
+    y_true = np.ravel(y_true)
+    y_pred = np.ravel(y_pred)
+    return float(np.mean(np.abs(y_pred - y_true) <= tol))
+
+def threshold_predictions(y_score, threshold=0.5):
+    return (np.ravel(y_score) >= threshold).astype(int).reshape(-1, 1)
+
+def classification_report_binary(y_true, y_score, threshold=0.5):
+    y_pred = threshold_predictions(y_score, threshold)
+
+    return {
+        "accuracy": accuracy(y_true, y_pred),
+        "precision": precision(y_true, y_pred),
+        "recall": recall(y_true, y_pred),
+        "f1": f1_score(y_true, y_pred),
+        "auc": auc(y_true, y_score),
+    }
+
+def regression_report(y_true, y_pred):
+    return {
+        "mae": mae(y_true, y_pred),
+        "mse": mse(y_true, y_pred),
+        "rmse": rmse(y_true, y_pred),
+        "r2": r2_score(y_true, y_pred),
+    }
+
+def roc_curve(y_true: np.ndarray, y_score: np.ndarray):
+    y_true = np.ravel(y_true).astype(int)
+    y_score = np.ravel(y_score)
+
+    # Sort by descending score
+    order = np.argsort(-y_score)
+    y_true = y_true[order]
+    y_score = y_score[order]
+
+    P = np.sum(y_true == 1)
+    N = np.sum(y_true == 0)
+
+    if P == 0 or N == 0:
+        raise ValueError("ROC is undefined when only one class is present.")
+
+    tpr = []
+    fpr = []
+    thresholds = []
+
+    tp = fp = 0
+    prev_score = None
+
+    for yt, score in zip(y_true, y_score):
+        if prev_score is None or score != prev_score:
+            tpr.append(tp / P)
+            fpr.append(fp / N)
+            thresholds.append(score)
+            prev_score = score
+
+        if yt == 1:
+            tp += 1
+        else:
+            fp += 1
+
+    # Final point (1,1)
+    tpr.append(1.0)
+    fpr.append(1.0)
+    thresholds.append(0.0)
+
+    return np.array(fpr), np.array(tpr), np.array(thresholds)
+
+def plot_roc_auc(y_true, y_score, title="ROC Curve"):
+    fpr, tpr, _ = roc_curve(y_true, y_score)
+    auc_value = auc(y_true, y_score)
+
+    plt.figure(figsize=(6, 6))
+    plt.plot(fpr, tpr, label=f"AUC = {auc_value:.4f}")
+    plt.plot([0, 1], [0, 1], linestyle="--", color="gray", label="Random")
+
+    plt.xlabel("False Positive Rate")
+    plt.ylabel("True Positive Rate")
+    plt.title(title)
+    plt.legend(loc="lower right")
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
