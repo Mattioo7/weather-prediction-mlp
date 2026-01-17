@@ -23,6 +23,7 @@ class WeatherFixedParams:
     split: Split = "train"
 
     # --- okno czasowe ---
+    window_size: int = 3
     skip_day: bool = True
     hours_per_day: int = 24
 
@@ -43,11 +44,9 @@ Aggregation = Literal["mean", "min", "max"]
 @dataclass
 class WeatherGridParams:
     window_aggregation: WindowAggregation = "flatten"
-    input_variables: tuple[str, ...] = ()
-    aggregations: dict[str, tuple[Aggregation, ...]] | None = None
-    cities: tuple[str, ...] | None = None
-
-    window_size: int = 3
+    input_variables: Sequence[str] = ()
+    aggregations: dict[str, Sequence[Aggregation]] | None = None
+    cities: Sequence[str] | None = None
 
 
 # =========================
@@ -60,10 +59,14 @@ Optimizer = Literal["sgd", "momentum", "adam"]
 @dataclass
 class MLPFixedParams:
     task: Task
-    beta: float = 0.9
-    beta2: float = 0.999
-    eps: float = 1e-8
-    adaptive_lr: bool = True
+    learning_rate: float = 0.01
+    seed: int = 42
+    use_bias: bool = True
+    optimizer: Optimizer = "momentum"
+    beta: float = 0.9  # for momentum and adam
+    beta2: float = 0.999  # for adam
+    eps: float = 1e-8  # for adam
+    adaptive_lr: bool = False # TODO: true?
     lr_decay: float = 0.99
 
 
@@ -76,10 +79,6 @@ class MLPGridParams:
     loss: Losses
     activation: Activations = "gelu"
 
-    learning_rate: float = 0.01
-    seed: int = 42
-    use_bias: bool = True
-    optimizer: Optimizer = "momentum"
 
 # =========================
 # FIT
@@ -87,11 +86,13 @@ class MLPGridParams:
 
 @dataclass
 class FitFixedParams:
+    shuffle: bool = False
     verbose: bool = False
     log_every: int | None = None
     use_tqdm: bool = True
     one_hot_if_needed: bool = True
     early_stopping: bool = True
+    val_split: float = 0.1
     patience: int = 20
     min_delta: float = 0.001
 
@@ -99,9 +100,6 @@ class FitFixedParams:
 class FitGridParams:
     epochs: int = 400
     batch_size: int | Literal["auto"] | None = "auto"
-
-    shuffle: bool = False
-    val_split: float = 0.1
 
 
 # =========================
