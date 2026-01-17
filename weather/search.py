@@ -12,6 +12,10 @@ from weather.config import (
     FitGridParams,
 )
 
+def _log(msg: str):
+    print(f"{msg}")
+
+
 def expand_grid(params):
     keys = params.__dataclass_fields__.keys()
     axes = []
@@ -45,7 +49,10 @@ class Search:
         experiment: Experiment,
         weather_grid: WeatherGridParams,
     ):
+        _log(f"\nBuilding dataset")
+
         # --- TRAIN ---
+        _log("  → TRAIN split")
         wf = experiment.weather_fixed
         wg = weather_grid
 
@@ -54,6 +61,7 @@ class Search:
         X_train, mu, sigma = normalize_global(X_train)
 
         # --- TEST ---
+        _log("  → TEST split")
         cfg_test = self._to_weather_config(wf, wg, split="test")
         X_test, y_test = build_dataset(cfg_test)
         X_test = (X_test - mu) / sigma
@@ -75,6 +83,10 @@ class Search:
         mg = mlp_grid
         ff = experiment.fit_fixed
         fg = fit_grid
+
+        _log(
+            f"\nTraining model"
+        )
 
         model = MLP(
             layer_sizes=[X_train.shape[1], *mg.hidden_layers, 1],
@@ -114,13 +126,18 @@ class Search:
     # 3. BUILD DATASET + TRAIN (FULL RUN)
     # ======================================================
     def run(self, experiment: Experiment):
+        _log(f"\nStarting experiment: {experiment.name}")
+
         results = []
+        run_id = 0
 
         for wg in expand_grid(experiment.weather_grid):
             X_train, y_train, X_test, y_test = self.build_dataset(experiment, wg)
 
             for mg in expand_grid(experiment.mlp_grid):
                 for fg in expand_grid(experiment.fit_grid):
+                    run_id += 1
+
                     model, history, weight_history, accuracy_history = self.train_model(
                         experiment,
                         mg,
@@ -156,6 +173,7 @@ class Search:
                         "y_proba": y_proba,
                     })
 
+        _log(f"\nExperiment finished | total runs = {run_id}\n")
         return results
 
     def _to_weather_config(self, fixed, grid, split):

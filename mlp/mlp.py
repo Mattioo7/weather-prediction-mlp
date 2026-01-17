@@ -65,8 +65,8 @@ class MLP:
         assert activation in ("sigmoid", "gelu", "identity"), \
             f"Invalid activation function: {activation}. Allowed: 'sigmoid', 'gelu', 'identity'"
 
-        print(">>> Initializing MLP...")
-        print(f"Layer sizes: {layer_sizes}, Task: {task}, Activation: {activation}, Optimizer: {optimizer}")
+        # print(">>> Initializing MLP...")
+        # print(f"Layer sizes: {layer_sizes}, Task: {task}, Activation: {activation}, Optimizer: {optimizer}")
 
         self.layer_sizes = layer_sizes
         self.n_layers = len(layer_sizes) - 1
@@ -331,7 +331,7 @@ class MLP:
     ) -> tuple[list[float], list[list[float]], list[float]]:
 
         start_time = time.perf_counter()
-        print(">>> Version 16 (mini-batch + early stopping)...")
+        # print(">>> Version 16 (mini-batch + early stopping)...")
 
         # ------------------- Y SHAPING -------------------
         if self.task == "regression":
@@ -357,6 +357,7 @@ class MLP:
         n_samples = X_train.shape[0]
 
         # ------------------- BATCH SIZE -------------------
+        # TODO: Delete?
         if batch_size == "auto":
             if self.optimizer == "adam":
                 eff_batch_size = min(100, n_samples)
