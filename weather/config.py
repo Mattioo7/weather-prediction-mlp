@@ -27,7 +27,7 @@ class WeatherFixedParams:
     hours_per_day: int = 24
 
     # --- normalizacja ---
-    normalization: Normalization = "global" # TODO: ???
+    normalization: Normalization = "global" # deprecated, use WeatherGridParams.normalization
 
     # --- kodowanie ---
     encode_wind_direction: bool = True
@@ -39,6 +39,12 @@ class WeatherFixedParams:
 
 WindowAggregation = Literal["flatten", "aggregate"]
 Aggregation = Literal["mean", "min", "max"]
+NormalizationType = Literal[
+    "standardize",   # (X - mean) / std
+    "minmax",        # [0, 1] (lub inny zakres)
+    "l2",            # normalizacja wektorów
+    "none",
+]
 
 @dataclass
 class WeatherGridParams:
@@ -46,6 +52,7 @@ class WeatherGridParams:
     input_variables: tuple[str, ...] | list[tuple[str, ...]] = ()
     aggregations: dict[str, tuple[Aggregation, ...]] | list[dict[str, tuple[Aggregation, ...]]] | None = None
     cities: tuple[str, ...] | list[tuple[str, ...]] | None = None
+    normalization: NormalizationType | list[NormalizationType] = "standardize"
 
     window_size: int | list[int] = 3
 
@@ -67,7 +74,7 @@ class MLPFixedParams:
     lr_decay: float = 0.99
 
 
-Activations = Literal["sigmoid", "identity", "softmax", "gelu"] # TODO: softmax?
+Activations = Literal["sigmoid", "identity", "relu", "leaky_relu", "gelu"]
 Losses = Literal["mse", "mae", "huber", "binary_cross_entropy", "categorical_cross_entropy"]
 
 @dataclass

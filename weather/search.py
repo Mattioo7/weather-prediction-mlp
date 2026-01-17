@@ -1,8 +1,14 @@
 from dataclasses import replace
 from itertools import product
 
+import numpy as np
+
 from weather.dataset import build_dataset
-from weather.normalization import normalize_global
+from weather.normalization import (
+    standardize_global,
+    minmax_scale_global,
+    normalize_l2_global,
+)
 from mlp.mlp import MLP
 
 from weather.config import (
@@ -49,7 +55,7 @@ class Search:
         experiment: Experiment,
         weather_grid: WeatherGridParams,
     ):
-        _log(f"\nBuilding dataset")
+        _log(f"\nBuilding dataset | {weather_grid.aggregations}")
 
         # --- TRAIN ---
         _log("  → TRAIN split")
@@ -58,13 +64,38 @@ class Search:
 
         cfg_train = self._to_weather_config(wf, wg, split="train")
         X_train, y_train = build_dataset(cfg_train)
-        X_train, mu, sigma = normalize_global(X_train)
+
+        normalization = wg.normalization
+        if normalization == "standardize":
+            X_train, p1, p2 = standardize_global(X_train)
+        elif normalization == "minmax":
+            X_train, p1, p2 = minmax_scale_global(X_train)
+        elif normalization == "l2":
+            X_train, p1 = normalize_l2_global(X_train)
+            p2 = None
+        elif normalization == "none":
+            p1 = p2 = None
+        else:
+            raise ValueError(f"Unknown normalization: {normalization}")
 
         # --- TEST ---
         _log("  → TEST split")
         cfg_test = self._to_weather_config(wf, wg, split="test")
         X_test, y_test = build_dataset(cfg_test)
-        X_test = (X_test - mu) / sigma
+
+        if normalization == "standardize":
+            X_test = (X_test - p1) / p2
+        elif normalization == "minmax":
+            min_val, max_val = p1, p2
+            scale = max_val - min_val
+            scale[scale == 0] = 1.0
+            X_test = (X_test - min_val) / scale
+        elif normalization == "l2":
+            norms = np.linalg.norm(X_test, axis=1, keepdims=True)
+            norms = np.maximum(norms, 1e-12)
+            X_test = X_test / norms
+        elif normalization == "none":
+            pass
 
         return X_train, y_train, X_test, y_test
 
@@ -138,6 +169,17 @@ class Search:
                 for fg in expand_grid(experiment.fit_grid):
                     run_id += 1
 
+                    _log(f"\nConfiguration run #{run_id}:")
+
+                    weather_vars = _get_variable_params(experiment.weather_grid, wg)
+                    _log_variable_section("WeatherGridParams (variable)", weather_vars)
+
+                    mlp_vars = _get_variable_params(experiment.mlp_grid, mg)
+                    _log_variable_section("MLPGridParams (variable)", mlp_vars)
+
+                    fit_vars = _get_variable_params(experiment.fit_grid, fg)
+                    _log_variable_section("FitGridParams (variable)", fit_vars)
+
                     model, history, weight_history, accuracy_history = self.train_model(
                         experiment,
                         mg,
@@ -200,3 +242,23 @@ class Search:
         cfg.cities = grid.cities
 
         return cfg
+
+def _get_variable_params(original, current) -> dict:
+    """
+    Zwraca tylko te pola, które:
+    - w oryginalnym obiekcie były listą (grid param)
+    - wraz z ich aktualną wartością
+    """
+    out = {}
+    for field in original.__dataclass_fields__:
+        orig_val = getattr(original, field)
+        if isinstance(orig_val, list):
+            out[field] = getattr(current, field)
+    return out
+
+def _log_variable_section(title: str, params: dict):
+    if not params:
+        return
+    _log(f"{title}:")
+    for k, v in params.items():
+        _log(f"  - {k}: {v}")

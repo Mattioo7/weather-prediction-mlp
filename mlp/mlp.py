@@ -7,9 +7,8 @@ from tqdm import trange
 from tqdm import tqdm
 import time
 
-from .activations import sigmoid, d_sigmoid, identity, softmax, gelu, gelu_derivative
+from .activations import sigmoid, d_sigmoid, identity, softmax, gelu, gelu_derivative, relu, d_relu, leaky_relu, d_leaky_relu
 from .losses import LOSSES
-from .utils import plot_loss, plot_predictions, plot_decision_boundary, plot_weight_evolution
 
 TaskType = Literal["regression", "binary", "multiclass"]
 
@@ -62,8 +61,8 @@ class MLP:
         assert len(layer_sizes) >= 2, "Provide at least [n_in, n_out]"
         assert task in ("regression", "binary", "multiclass"), \
             f"Invalid task: {task}. Allowed: 'regression', 'binary', 'multiclass'"
-        assert activation in ("sigmoid", "gelu", "identity"), \
-            f"Invalid activation function: {activation}. Allowed: 'sigmoid', 'gelu', 'identity'"
+        assert activation in ("sigmoid", "gelu", "identity", "relu", "leaky_relu"), \
+            f"Invalid activation function: {activation}. Allowed: 'sigmoid', 'gelu', 'identity', 'relu', 'leaky_relu'"
 
         # print(">>> Initializing MLP...")
         # print(f"Layer sizes: {layer_sizes}, Task: {task}, Activation: {activation}, Optimizer: {optimizer}")
@@ -111,6 +110,12 @@ class MLP:
         elif activation == "identity":
             self.activation = identity
             self.d_activation = lambda x: 1
+        elif activation == "relu":
+            self.activation = relu
+            self.d_activation = d_relu
+        elif activation == "leaky_relu":
+            self.activation = leaky_relu
+            self.d_activation = d_leaky_relu
         else:
             raise ValueError(f"Unknown activation function: {activation}")
 

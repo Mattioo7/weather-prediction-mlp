@@ -22,6 +22,17 @@ def softmax(x: np.ndarray, axis: int = 1) -> np.ndarray:
     exps = np.exp(x_shift)
     return exps / np.sum(exps, axis=axis, keepdims=True)
 
+def relu(x: ArrayLike) -> np.ndarray:
+    return np.maximum(0.0, x)
+
+def d_relu(x: ArrayLike) -> np.ndarray:
+    return (x > 0).astype(float)
+
+def leaky_relu(x: ArrayLike, alpha: float = 0.01) -> np.ndarray:
+    return np.where(x > 0, x, alpha * x)
+
+def d_leaky_relu(x: ArrayLike, alpha: float = 0.01) -> np.ndarray:
+    return np.where(x > 0, 1.0, alpha)
 
 def gelu(x: ArrayLike) -> np.ndarray:
     x = np.clip(x, -10.0, 10.0)
@@ -47,12 +58,16 @@ ACTIVATIONS = {
     "sigmoid": sigmoid,
     "identity": identity,
     "softmax": softmax,
+    "relu": relu,
+    "leaky_relu": leaky_relu,
     "gelu": gelu,
 }
 
 ACTIVATIONS_DERIVATIVES = {
     "sigmoid": d_sigmoid,
     "identity": lambda x: 1,
+    "relu": d_relu,
+    "leaky_relu": d_leaky_relu,
     "gelu": gelu_derivative,
 }
 
