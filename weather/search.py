@@ -1,6 +1,5 @@
 from dataclasses import replace
 from itertools import product
-from typing import Iterable
 
 from weather.dataset import build_dataset
 from weather.normalization import normalize_global
@@ -71,7 +70,7 @@ class Search:
         fit_grid: FitGridParams,
         X_train,
         y_train,
-    ) -> MLP:
+    ) -> tuple[MLP, list[float], list[list[float]], list[float]]:
         mf = experiment.mlp_fixed
         mg = mlp_grid
         ff = experiment.fit_fixed
@@ -93,7 +92,7 @@ class Search:
             lr_decay=mf.lr_decay,
         )
 
-        model.fit(
+        history, weight_history, accuracy_history = model.fit(
             X_train,
             y_train,
             epochs=fg.epochs,
@@ -109,7 +108,7 @@ class Search:
             val_split=fg.val_split,
         )
 
-        return model
+        return model, history, weight_history, accuracy_history
 
     # ======================================================
     # 3. BUILD DATASET + TRAIN (FULL RUN)
@@ -122,7 +121,7 @@ class Search:
 
             for mg in expand_grid(experiment.mlp_grid):
                 for fg in expand_grid(experiment.fit_grid):
-                    model = self.train_model(
+                    model, history, weight_history, accuracy_history = self.train_model(
                         experiment,
                         mg,
                         fg,
@@ -133,14 +132,28 @@ class Search:
                     # TODO: Return results or model?
                     y_pred = model.predict(X_test)
 
+                    # probabilities only for classification
+                    y_proba = None
+                    if model.task in ("binary", "multiclass"):
+                        y_proba = model.predict_proba(X_test)
+
                     results.append({
                         "experiment": experiment.name,
                         "weather": wg,
                         "mlp": mg,
                         "fit": fg,
+
                         "model": model,
+
+                        # training artifacts
+                        "history": history,
+                        "weight_history": weight_history,
+                        "accuracy_history": accuracy_history,
+
+                        # test outputs
                         "y_test": y_test,
                         "y_pred": y_pred,
+                        "y_proba": y_proba,
                     })
 
         return results
