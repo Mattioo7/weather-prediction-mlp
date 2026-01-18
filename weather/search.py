@@ -55,7 +55,7 @@ class Search:
         experiment: Experiment,
         weather_grid: WeatherGridParams,
     ):
-        _log(f"\nBuilding dataset | {weather_grid.aggregations}")
+        _log(f"\nBuilding dataset")
 
         # --- TRAIN ---
         _log("  → TRAIN split")
@@ -169,16 +169,8 @@ class Search:
                 for fg in expand_grid(experiment.fit_grid):
                     run_id += 1
 
-                    _log(f"\nConfiguration run #{run_id}:")
-
-                    weather_vars = _get_variable_params(experiment.weather_grid, wg)
-                    _log_variable_section("WeatherGridParams (variable)", weather_vars)
-
-                    mlp_vars = _get_variable_params(experiment.mlp_grid, mg)
-                    _log_variable_section("MLPGridParams (variable)", mlp_vars)
-
-                    fit_vars = _get_variable_params(experiment.fit_grid, fg)
-                    _log_variable_section("FitGridParams (variable)", fit_vars)
+                    config_log = build_run_config_log(experiment, wg, mg, fg)
+                    log_run_config(run_id, config_log)
 
                     model, history, weight_history, accuracy_history = self.train_model(
                         experiment,
@@ -198,6 +190,9 @@ class Search:
 
                     results.append({
                         "experiment": experiment.name,
+
+                        "config_log": config_log,
+
                         "weather": wg,
                         "mlp": mg,
                         "fit": fg,
@@ -262,3 +257,20 @@ def _log_variable_section(title: str, params: dict):
     _log(f"{title}:")
     for k, v in params.items():
         _log(f"  - {k}: {v}")
+
+def build_run_config_log(experiment: Experiment, wg, mg, fg) -> dict:
+    return {
+        "weather": _get_variable_params(experiment.weather_grid, wg),
+        "mlp": _get_variable_params(experiment.mlp_grid, mg),
+        "fit": _get_variable_params(experiment.fit_grid, fg),
+    }
+
+def log_run_config(run_id: int, config_log: dict):
+    _log(f"\nConfiguration run #{run_id}:")
+
+    for section, params in config_log.items():
+        if not params:
+            continue
+        _log(f"{section.upper()} (variable):")
+        for k, v in params.items():
+            _log(f"  - {k}: {v}")

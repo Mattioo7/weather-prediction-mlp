@@ -6,3 +6,8 @@ TODO:
 - standardyzacja zamiast normalizacji
 - usunąć automatyczny batching?
 - dodać trend jako cechę
+
+Uwagi:
+- wypisywane jest wszystko, co jest w [...]
+- wszystko jest fajnie zaimplementowane, ale następnym razem zadbałbym o lepszą możliwość integracji
+- tzn. zasugerowałbym się bardziej jak wygląda api sklearna itp., np. sygnatura fit()
