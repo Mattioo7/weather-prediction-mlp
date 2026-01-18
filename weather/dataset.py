@@ -7,6 +7,7 @@ from .io import load_variable_csv
 from .preprocessing import daily_aggregate
 from .encoding import encode_wind_direction_deg
 
+_DATA_CACHE: dict[tuple[str, str], dict[str, pd.DataFrame]] = {}
 
 def build_dataset(cfg, verbose: bool | str = False):
     data_dir = Path(cfg.data_dir)
@@ -31,12 +32,7 @@ def build_dataset(cfg, verbose: bool | str = False):
     log(f"Input variables: {cfg.input_variables}")
 
     # -------------------- LOAD DATA --------------------
-    data = {}
-    for var in cfg.input_variables:
-        path = data_dir / cfg.split / f"{var}_{cfg.split}.csv"
-        log(f"Loading {path.name}")
-        data[var] = load_variable_csv(path)
-        debug_log(f"{var}: shape={data[var].shape}")
+    data = _load_all_variables_once(cfg, log, debug_log)
 
     # -------------------- CITIES --------------------
     cities = list(cfg.cities) if cfg.cities is not None else list(data[cfg.input_variables[0]].columns)
@@ -215,3 +211,25 @@ def build_dataset(cfg, verbose: bool | str = False):
     log("=== BUILD DATASET END ===")
 
     return X, Y
+
+def _load_all_variables_once(cfg, log, debug_log):
+    """
+    Load all required variables for given (data_dir, split) only once.
+    """
+    cache_key = (str(Path(cfg.data_dir).resolve()), cfg.split)
+
+    if cache_key in _DATA_CACHE:
+        debug_log("Using cached data")
+        return _DATA_CACHE[cache_key]
+
+    log("Loading raw CSV files (once)...")
+
+    data = {}
+    for var in cfg.input_variables:
+        path = Path(cfg.data_dir) / cfg.split / f"{var}_{cfg.split}.csv"
+        log(f"  → Loading {path.name}")
+        data[var] = load_variable_csv(path)
+        debug_log(f"    {var}: shape={data[var].shape}")
+
+    _DATA_CACHE[cache_key] = data
+    return data

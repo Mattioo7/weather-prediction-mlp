@@ -159,6 +159,11 @@ class Search:
     def run(self, experiment: Experiment):
         _log(f"\nStarting experiment: {experiment.name}")
 
+        n_weather = sum(1 for _ in expand_grid(experiment.weather_grid))
+        n_mlp = sum(1 for _ in expand_grid(experiment.mlp_grid))
+        n_fit = sum(1 for _ in expand_grid(experiment.fit_grid))
+        total_runs = n_weather * n_mlp * n_fit
+
         results = []
         run_id = 0
 
@@ -170,7 +175,7 @@ class Search:
                     run_id += 1
 
                     config_log = build_run_config_log(experiment, wg, mg, fg)
-                    log_run_config(run_id, config_log)
+                    log_run_config(run_id, total_runs, config_log)
 
                     model, history, weight_history, accuracy_history = self.train_model(
                         experiment,
@@ -265,8 +270,8 @@ def build_run_config_log(experiment: Experiment, wg, mg, fg) -> dict:
         "fit": _get_variable_params(experiment.fit_grid, fg),
     }
 
-def log_run_config(run_id: int, config_log: dict):
-    _log(f"\nConfiguration run #{run_id}:")
+def log_run_config(run_id: int, total_runs: int, config_log: dict):
+    _log(f"\nConfiguration run {run_id}/{total_runs}:")
 
     for section, params in config_log.items():
         if not params:
