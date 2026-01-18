@@ -3,7 +3,7 @@ from itertools import product
 
 import numpy as np
 
-from weather.dataset import build_dataset
+from weather.dataset import build_dataset, _DATA_CACHE
 from weather.normalization import (
     standardize_global,
     minmax_scale_global,
@@ -158,6 +158,8 @@ class Search:
     # ======================================================
     def run(self, experiment: Experiment):
         _log(f"\nStarting experiment: {experiment.name}")
+
+        _DATA_CACHE.clear()
 
         n_weather = sum(1 for _ in expand_grid(experiment.weather_grid))
         n_mlp = sum(1 for _ in expand_grid(experiment.mlp_grid))
