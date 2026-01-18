@@ -12,3 +12,5 @@ Uwagi:
 - wypisywane jest wszystko, co jest w [...]
 - wszystko jest fajnie zaimplementowane, ale następnym razem zadbałbym o lepszą możliwość integracji
 - tzn. zasugerowałbym się bardziej jak wygląda api sklearn itp., np. sygnatura fit()
+
+Plan eksperymentów:

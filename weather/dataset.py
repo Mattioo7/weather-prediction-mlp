@@ -84,6 +84,10 @@ def build_dataset(cfg, verbose: bool | str = False):
                     debug_log(f"  Processing day I: {d.date()}")
 
                     for var, aggs in cfg.aggregations.items():
+                        if var not in city_series:
+                            debug_log(f"    SKIP var={var} (not in input_variables)")
+                            continue
+
                         day_data = city_series[var][d : d + pd.Timedelta("1D")] # TODO: check slicing
 
                         agg = daily_aggregate(
@@ -120,6 +124,10 @@ def build_dataset(cfg, verbose: bool | str = False):
 
                     day_features = []
                     for var, aggs in cfg.aggregations.items():
+                        if var not in city_series:
+                            debug_log(f"    SKIP var={var} (not in input_variables)")
+                            continue
+
                         day_data = city_series[var][d: d + pd.Timedelta("1D")]  # TODO: check slicing
 
                         agg = daily_aggregate(
