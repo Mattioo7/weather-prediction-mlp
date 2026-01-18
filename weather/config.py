@@ -38,7 +38,7 @@ class WeatherFixedParams:
 
 
 WindowAggregation = Literal["flatten", "aggregate"]
-Aggregation = Literal["mean", "min", "max"]
+Aggregation = Literal["mean", "min", "max", "trend"]
 NormalizationType = Literal[
     "standardize",   # (X - mean) / std
     "minmax",        # [0, 1] (lub inny zakres)
